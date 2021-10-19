@@ -7,28 +7,10 @@
 #include <sstream>
 #include <string>
 
-#define ASSERT(x) if (!(x)) __debugbreak();
+#include "Renderer.h"
 
-#define GLCall(x) GLClearError();\
-                  x;\
-                  ASSERT(GLLogCall(#x, __FILE__, __LINE__ ))
-
-// Use glGetError to clear all existing errors
-static void GLClearError()
-{
-    while (glGetError() != GL_NO_ERROR);
-}
-
-// Use glGetError to get current errors
-static bool GLLogCall(const char* function, const char* file, int line)
-{
-    while (GLenum error = glGetError())
-    {
-        std::cout << "[OpenGL ERROR] - " << error << "'Function name : " << function << " File name : " << file << " Line number : " << line << std::endl;
-        return false;
-    }
-    return true;
-}
+#include "VertexBuffer.h"
+#include "IndexBuffer.h"
 
 struct shaderProgSource
 {
@@ -176,6 +158,8 @@ int main(void)
     /* Make the window's context current */
     glfwMakeContextCurrent(window);
 
+    glfwSwapInterval(1);
+
     GLenum err = glewInit();
 
     if (err != GLEW_OK)
@@ -185,6 +169,10 @@ int main(void)
         // fprintf(stderr, "Error: %s\n", glewGetErrorString(err));
         // ...
     }
+
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
     // Vertex array of positions
     float SimpleSquarePositions[] =         {-0.5f, -0.5f,
@@ -196,40 +184,57 @@ int main(void)
     unsigned int SimpleSquareIndices[] =   {0,1,2,
                                             2,3,0};
 
-    // Create a buffer id
-    unsigned int bufferId;
 
-    // Create a vertex buffer with the provided id (bufferId) and bind it
-    GLCall(glGenBuffers(1, &bufferId));
-    GLCall(glBindBuffer(GL_ARRAY_BUFFER, bufferId));
-    GLCall(glBufferData(GL_ARRAY_BUFFER, 6 * 2 * sizeof(float), SimpleSquarePositions, GL_STATIC_DRAW));
+    // Vertex array objects link together vertex buffers and attribute into one object
+    unsigned int vertexArrayObject;
+    GLCall(glGenVertexArrays(1, &vertexArrayObject));
+    GLCall(glBindVertexArray(vertexArrayObject));
 
-    // Create a buffer id
-    unsigned int indexBuffer;
-
-    // Create an index buffer with the provided id (indexBuffer) and bind it
-    GLCall(glGenBuffers(1, &indexBuffer));
-    GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBuffer));
-    GLCall(glBufferData(GL_ELEMENT_ARRAY_BUFFER, 6 * sizeof(unsigned int), SimpleSquareIndices, GL_STATIC_DRAW));
+    // Construct VertexBuffer object 
+    VertexBuffer vertexBuffer(SimpleSquarePositions, 4 * 2 * sizeof(float));
 
 
     // Enable the vertex attribute Array
     GLCall(glEnableVertexAttribArray(0));
 
-    // Set vertex attribute details
+    // Set vertex attribute details 
+    // This call links the currently bound vertex buffer (at 0 as per glVertexAttribPointer(0... <-- ) 
+    // and attribute in the vertex array object above. The vertexArrayObject can then be bound and used instead of bind buffer and glVertexAttribPointer
     GLCall(glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 2, 0));
+
+    IndexBuffer indexBuffer(SimpleSquareIndices, 6);
 
     // Get vertex and fragment shader source code from BasicShader.shader
     shaderProgSource source = ParseShader("Res/Shaders/BasicShader.shader");
 
-    //std::cout << "VERTEX SHADER CODE" << std::endl;
-    //std::cout << source.vertexSource << std::endl;
-    ///std::cout << "FRAGMENT SHADER CODE" << std::endl;
-    //std::cout << source.fragmentSource << std::endl;
-
     // Create the shader program from the shader sources
     unsigned int shader = CreateShader(source.vertexSource, source.fragmentSource);
     GLCall(glUseProgram(shader));
+
+    // Get the uniform from the shader using it's name
+    int location = glGetUniformLocation(shader, "u_Colour");
+
+    // break if the uniform does not exist
+    ASSERT(location != -1)
+
+    // set the uniform value useing the correct glUniform** call
+    GLCall(glUniform4f(location, 0.0f, 1.0f, 0.0f, 1.0f));
+
+    // Unbind all buffers/programs/attribs by passing 0
+    GLCall(glBindVertexArray(0));
+    GLCall(glUseProgram(0));
+    GLCall(glBindBuffer(GL_ARRAY_BUFFER, 0));
+    GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0));
+
+    // Base RGB values
+    float rValue = 0.1f;
+    float gValue = 0.8f;
+    float bValue = 1.0f;
+
+    // Incrementation amounts used to modify the RBG values
+    float rIncrement = 0.01f;
+    float gIncrement = 0.002f;
+    float bIncrement = 0.05f;
 
     /* Loop until the user closes the window */
     while (!glfwWindowShouldClose(window))
@@ -237,20 +242,53 @@ int main(void)
         /* Render here */
         GLCall(glClear(GL_COLOR_BUFFER_BIT));
 
-       // GLClearError();
+        // Bind the shader program
+        GLCall(glUseProgram(shader));
+
+        // Set the colour uniform using the initial RGB values
+        GLCall(glUniform4f(location, rValue, gValue, bValue, 1.0f));
+
+        // Bind the vertex array object instead of having to bind the buffer and then add attrib
+        GLCall(glBindVertexArray(vertexArrayObject));
+
+        // Bind the index buffer
+        indexBuffer.Bind();
+
         // Draw call which uses the index array instead of raw positions 
-        GLCall(glDrawElements(GL_TRIANGLES, 6, GL_INT, nullptr));
-        //ASSERT(GLLogCall());
+        GLCall(glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr));
 
+        // Check if the RGB values are greater than 1 and modify the incrementation value accordingly
+        if (rValue > 1.0f)
+        {
+            rIncrement = -0.01f;
+        }
+        else if(rValue < 0.0f)
+        {
+            rIncrement = 0.01f;
+        }
 
-        // Legacy OpenGL for initial GL check! 
-        /*
-        glBegin(GL_TRIANGLES);
-            glVertex2f(-0.5f, -0.5f);
-            glVertex2f( 0.0f,  0.5f);
-            glVertex2f( 0.5f, -0.5f);
-        glEnd();
-        */
+        if (gValue > 1.0f)
+        {
+            gIncrement = -0.01f;
+        }
+        else if (gValue < 0.0f)
+        {
+            gIncrement = 0.01f;
+        }
+
+        if (bValue > 1.0f)
+        {
+            bIncrement = -0.01f;
+        }
+        else if (bValue < 0.0f)
+        {
+            bIncrement = 0.01f;
+        }
+
+        // Increment the RGB values
+        rValue += rIncrement;
+        gValue += gIncrement;
+        bValue += bIncrement;
 
         /* Swap front and back buffers */
         GLCall(glfwSwapBuffers(window));
