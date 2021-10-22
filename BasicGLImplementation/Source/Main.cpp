@@ -12,11 +12,76 @@
 #include "VertexBuffer.h"
 #include "IndexBuffer.h"
 
+struct colourChangeValues
+{
+    float R;
+    float G;
+    float B;
+
+    float Inc;
+};
+
+colourChangeValues colours{ 0.1f, 0.1f, 0.1f, 0.1f }; // Bad! Bad! Bad! Globals Very Bad!
+
+void IncR()
+{
+    if (colours.R > 1.0f)
+    {
+        colours.Inc = -0.01f;
+    }
+    else if (colours.R < 0.0f)
+    {
+        colours.Inc = 0.01f;
+    }
+
+    colours.R += colours.Inc;
+}
+
+void IncG()
+{
+    if (colours.G > 1.0f)
+    {
+        colours.Inc = -0.01f;
+    }
+    else if (colours.G < 0.0f)
+    {
+        colours.Inc = 0.01f;
+    }
+
+    colours.G += colours.Inc;
+}
+
+void IncB()
+{
+    if (colours.B > 1.0f)
+    {
+        colours.Inc = -0.01f;
+    }
+    else if (colours.B < 0.0f)
+    {
+        colours.Inc = 0.01f;
+    }
+
+    colours.B += colours.Inc;
+}
+
 struct shaderProgSource
 {
     std::string vertexSource;
     std::string fragmentSource;
 };
+
+void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
+{
+    if (key == GLFW_KEY_R && action == GLFW_PRESS)
+        IncR();
+
+    if (key == GLFW_KEY_G && action == GLFW_PRESS)
+        IncG();
+
+    if (key == GLFW_KEY_B && action == GLFW_PRESS)
+        IncB();
+}
 
 static shaderProgSource ParseShader(const std::string& path)
 {
@@ -158,6 +223,8 @@ int main(void)
     /* Make the window's context current */
     glfwMakeContextCurrent(window);
 
+    glfwSetKeyCallback(window, key_callback);
+
     glfwSwapInterval(1);
 
     GLenum err = glewInit();
@@ -226,16 +293,6 @@ int main(void)
     GLCall(glBindBuffer(GL_ARRAY_BUFFER, 0));
     GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0));
 
-    // Base RGB values
-    float rValue = 0.1f;
-    float gValue = 0.8f;
-    float bValue = 1.0f;
-
-    // Incrementation amounts used to modify the RBG values
-    float rIncrement = 0.01f;
-    float gIncrement = 0.002f;
-    float bIncrement = 0.05f;
-
     /* Loop until the user closes the window */
     while (!glfwWindowShouldClose(window))
     {
@@ -246,7 +303,7 @@ int main(void)
         GLCall(glUseProgram(shader));
 
         // Set the colour uniform using the initial RGB values
-        GLCall(glUniform4f(location, rValue, gValue, bValue, 1.0f));
+        GLCall(glUniform4f(location, colours.R, colours.G, colours.B, 1.0f));
 
         // Bind the vertex array object instead of having to bind the buffer and then add attrib
         GLCall(glBindVertexArray(vertexArrayObject));
@@ -256,39 +313,6 @@ int main(void)
 
         // Draw call which uses the index array instead of raw positions 
         GLCall(glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr));
-
-        // Check if the RGB values are greater than 1 and modify the incrementation value accordingly
-        if (rValue > 1.0f)
-        {
-            rIncrement = -0.01f;
-        }
-        else if(rValue < 0.0f)
-        {
-            rIncrement = 0.01f;
-        }
-
-        if (gValue > 1.0f)
-        {
-            gIncrement = -0.01f;
-        }
-        else if (gValue < 0.0f)
-        {
-            gIncrement = 0.01f;
-        }
-
-        if (bValue > 1.0f)
-        {
-            bIncrement = -0.01f;
-        }
-        else if (bValue < 0.0f)
-        {
-            bIncrement = 0.01f;
-        }
-
-        // Increment the RGB values
-        rValue += rIncrement;
-        gValue += gIncrement;
-        bValue += bIncrement;
 
         /* Swap front and back buffers */
         GLCall(glfwSwapBuffers(window));
@@ -302,3 +326,4 @@ int main(void)
     glfwTerminate();
     return 0;
 }
+
